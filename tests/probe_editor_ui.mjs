@@ -1,0 +1,110 @@
+// Only synthetic chats in mock_editor_server.py. Never navigate to the human editor.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { readFile, writeFile } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createInterface } from 'node:readline';
+const { chromium } = await import(pathToFileURL(process.argv[3]).href);
+const child = spawn(process.argv[2], ['-B', resolve('tests/mock_editor_server.py')], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let browser;
+try {
+  const lines = createInterface({ input: child.stdout });
+  const fixture = await Promise.race([
+    new Promise((ok, bad) => { lines.once('line', line => { try { ok(JSON.parse(line)); } catch (e) { bad(e); } }); child.once('error', bad); child.once('exit', code => bad(new Error('Fixture exited: ' + code))); }),
+    new Promise((_, bad) => { const timer = setTimeout(() => bad(new Error('Fixture timeout')), 10000); timer.unref(); })
+  ]);
+  browser = await chromium.launch({ headless: true, executablePath: process.argv[4] || undefined });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('dialog', dialog => dialog.accept());
+  const policyPath = join(fixture.home, 'whitelist.json');
+  const original = await readFile(policyPath, 'utf8');
+  await page.goto(fixture.url);
+  await page.getByRole('checkbox', { name: 'Отправлять в Дизайн-команда', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).hash, '');
+  assert.equal(await page.locator('#search').inputValue(), 'Дизайн');
+  assert.equal(await page.locator('#selected-count').textContent(), '2');
+  assert.equal(await page.getByRole('checkbox', { name: 'Отправлять в Дизайн-команда', exact: true }).isChecked(), false);
+  assert.equal(await page.locator('#save').isDisabled(), true);
+  assert.equal(await readFile(policyPath, 'utf8'), original);
+  await page.getByRole('checkbox', { name: 'Отправлять в Дизайн-команда', exact: true }).check();
+  await page.locator('#search').fill('');
+  assert.equal(await page.locator('.chat-row').count(), 100);
+  await page.locator('#more').click();
+  assert.equal(await page.locator('.chat-row').count(), 119);
+  await page.locator('#allowed').click();
+  assert.equal(await page.locator('.chat-row').count(), 3);
+  await page.locator('#all').click();
+  await page.locator('#search').fill('@test_103');
+  await page.getByRole('checkbox', { name: 'Отправлять в Михаил Волков', exact: true }).focus();
+  await page.keyboard.press('Space');
+  await page.locator('#search').fill('несуществующий чат');
+  assert.equal(await page.locator('#empty').isVisible(), true);
+  await page.locator('#search').fill('<img');
+  assert.equal(await page.locator('#chat-list img').count(), 0);
+  assert.equal(await page.locator('.chat-name').textContent(), 'Проект <img src=x onerror=alert(1)>');
+  await page.locator('#search').fill('Новости');
+  assert.equal(await page.getByRole('checkbox', { name: 'Отправлять в Новости технологий', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('checkbox', { name: 'Читать Новости технологий', exact: true }).isChecked(), true);
+  await page.getByRole('checkbox', { name: 'Читать Новости технологий', exact: true }).uncheck();
+  await page.locator('#search').fill('Дизайн');
+  await page.getByRole('checkbox', { name: 'Читать Дизайн-команда', exact: true }).uncheck();
+  assert.equal(await page.getByRole('checkbox', { name: 'Отправлять в Дизайн-команда', exact: true }).isChecked(), true);
+  await page.locator('#search').fill('');
+  await page.locator('#blocked').click();
+  assert.equal(await page.locator('.chat-row').count(), 2);
+  await page.locator('#read-all').click();
+  assert.equal(await page.locator('.chat-row').count(), 0);
+  assert.equal(await page.locator('#selected-count').textContent(), '4');
+  await page.locator('#all').click();
+  await page.locator('#search').fill('Дизайн');
+  await page.getByRole('checkbox', { name: 'Читать Дизайн-команда', exact: true }).uncheck();
+  await page.locator('#search').fill('');
+  assert.equal(await readFile(policyPath, 'utf8'), original); // Changes only persist on explicit Save.
+  await page.screenshot({ path: join(fixture.home, 'desktop.png'), fullPage: false });
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.startsWith('Готово.'));
+  assert.deepEqual(JSON.parse(await readFile(policyPath, 'utf8')).write.allow, [100, 101, 102, 103]);
+  assert.equal(await page.locator('#save').isDisabled(), true);
+  const permissions = JSON.parse(await readFile(policyPath, 'utf8'));
+  assert.equal(permissions.version, 2);
+  assert.equal(permissions.read.default, true);
+  assert.deepEqual(permissions.read.deny, [102]);
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Отправлять в Дизайн-команда', exact: true }).waitFor();
+  assert.equal(await page.locator('#selected-count').textContent(), '4');
+  await page.locator('#search').fill('');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: join(fixture.home, 'mobile.png'), fullPage: false });
+  // A second browser receives no capability from the public link.
+  const stranger = await browser.newContext();
+  const other = await stranger.newPage();
+  await other.goto(fixture.origin);
+  await other.locator('#locked:not([hidden])').waitFor();
+  assert.equal(await other.locator('.chat-row').count(), 0);
+  await stranger.close();
+  // A competing human change must be explained by the UI, never silently replaced.
+  const changed = JSON.parse(await readFile(policyPath, 'utf8')); changed.messages_per_day = 190;
+  await writeFile(policyPath, JSON.stringify(changed));
+  await page.getByRole('checkbox', { name: 'Отправлять в Анна Смирнова', exact: true }).uncheck();
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('другом окне'));
+  assert.equal(JSON.parse(await readFile(policyPath, 'utf8')).write.allow.length, 4);
+  await page.locator('#refresh').click();
+  await page.waitForFunction(() => document.querySelector('#save').disabled && !document.querySelector('#refresh').disabled);
+  await page.getByRole('checkbox', { name: 'Отправлять в Анна Смирнова', exact: true }).uncheck();
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.startsWith('Готово.'));
+  assert.equal(JSON.parse(await readFile(policyPath, 'utf8')).write.allow.length, 3);
+  await page.locator('#close').click();
+  await page.getByRole('heading', { name: 'Редактор закрыт', exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, screenshots: fixture.home, checks: ['prefilled search does not select', 'filtering', 'pagination', 'keyboard', 'literal untrusted labels', 'read-only channels', 'independent read/write', 'read blacklist', 'allow all future reads', 'explicit save', 'reload', 'mobile', 'unauthorized browser', 'revision conflict', 'remove', 'close'], telegramUsed: false }));
+} finally {
+  if (browser) await browser.close();
+  child.kill();
+}

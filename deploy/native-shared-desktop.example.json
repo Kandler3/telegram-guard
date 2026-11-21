@@ -1,0 +1,8 @@
+{
+  "codex": "C:\\path\\to\\Codex\\app\\resources\\codex.exe",
+  "desktop": "C:\\path\\to\\Codex\\app\\ChatGPT.exe",
+  "node": "C:\\path\\to\\node.exe",
+  "version": "auto",
+  "port": 48964,
+  "codex_home": "C:\\Users\\YOUR_USER\\.codex"
+}

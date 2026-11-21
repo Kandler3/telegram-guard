@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-telegram-guard-local"
+version = "2.6.2"
+description = "Local stdio Telegram sender protected by Codex filesystem permissions"
+requires-python = ">=3.11"
+dependencies = ["Telethon==1.45.0", "mcp==1.30.0", "websockets==15.0.1", "pydantic>=2.11,<3"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[project.scripts]
+telegram-local-mcp = "telegram_guard_local.mcp_server:main"
+telegram-local-admin = "telegram_guard_local.admin:main"
+codex-shared-stdio = "telegram_guard_local.desktop_stdio:codex_main"
+
+[tool.setuptools.packages.find]
+include = ["telegram_guard_local*"]
+
+[tool.setuptools.package-data]
+telegram_guard_local = ["editor_assets/*.html", "editor_assets/*.css", "editor_assets/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

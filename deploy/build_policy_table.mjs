@@ -1,0 +1,703 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { Workbook, SpreadsheetFile } from '@oai/artifact-tool';
+
+const root = path.resolve(import.meta.dirname, '..');
+const source = JSON.parse(await fs.readFile(path.join(root, 'deploy/telegram-api-layer-229.json'), 'utf8'));
+const groups = {
+account:'Аккаунт и настройки', aicompose:'Генерация текста', auth:'Авторизация', bots:'Боты и мини-приложения',
+channels:'Каналы и супергруппы',chatlists:'Общие папки чатов',communities:'Сообщества',contacts:'Контакты',
+core:'Служебный протокол',ephemeral:'Временные сообщения',folders:'Папки',fragment:'Коллекционные объекты',
+help:'Конфигурация и справка',langpack:'Языковые пакеты',messages:'Сообщения и чаты',payments:'Платежи и подарки',
+phone:'Звонки и трансляции',photos:'Фотографии профиля',premium:'Премиум и голоса',smsjobs:'Задания отправки СМС',
+stats:'Статистика',stickers:'Наборы стикеров',stories:'Истории',updates:'События и синхронизация',upload:'Передача файлов',users:'Пользователи'
+};
+const verbs = {
+Get:'Получить',Set:'Установить',Update:'Обновить',Delete:'Удалить',Send:'Отправить',Edit:'Изменить',
+Toggle:'Переключить',Check:'Проверить',Save:'Сохранить',Reset:'Сбросить',Create:'Создать',
+Accept:'Принять',Cancel:'Отменить',Change:'Изменить',Clear:'Очистить',Confirm:'Подтвердить',
+Decline:'Отклонить',Disable:'Отключить',Finish:'Завершить',Init:'Инициализировать',Install:'Установить',
+Invalidate:'Аннулировать',Register:'Зарегистрировать',Reorder:'Изменить порядок',Report:'Подать жалобу / сообщить',
+Resend:'Отправить повторно',Resolve:'Разрешить идентификатор',Unregister:'Отменить регистрацию',Upload:'Загрузить',
+Verify:'Подтвердить',Add:'Добавить',Allow:'Разрешить',Answer:'Ответить',Can:'Проверить возможность',
+Invoke:'Выполнить запрос',Convert:'Преобразовать',Deactivate:'Деактивировать',Export:'Экспортировать',
+Invite:'Пригласить',Join:'Присоединиться',Leave:'Покинуть',Read:'Отметить прочитанным',Restrict:'Ограничить',
+Hide:'Скрыть',Block:'Заблокировать',Import:'Импортировать',Unblock:'Разблокировать',Destroy:'Уничтожить',
+Bind:'Привязать',Drop:'Отозвать',Recover:'Восстановить',Request:'Запросить',Log:'Выполнить',Sign:'Выполнить',
+Apply:'Применить',Assign:'Привязать',Connect:'Подключить',Craft:'Скомбинировать',Fulfill:'Исполнить',
+Launch:'Запустить',Refund:'Вернуть средства',Transfer:'Передать',Upgrade:'Улучшить',Validate:'Проверить',
+Discard:'Завершить',Received:'Подтвердить получение',Start:'Запустить',Load:'Загрузить',
+Remove:'Удалить',Rename:'Переименовать',Replace:'Заменить',Suggest:'Предложить',Activate:'Включить',
+Increment:'Увеличить',Search:'Найти',Reupload:'Повторно загрузить',Append:'Дополнить',Click:'Зарегистрировать нажатие',
+Compose:'Составить',Fave:'Добавить в избранное',Forward:'Переслать',Mark:'Пометить',Migrate:'Преобразовать',
+Prolong:'Продлить',Rate:'Оценить',Transcribe:'Расшифровать',Translate:'Перевести',Uninstall:'Удалить установленный',
+Unpin:'Открепить',Summarize:'Сделать краткое изложение',View:'Зарегистрировать просмотр',Is:'Проверить',
+Ping:'Проверить соединение',Req:'Запросить',Rpc:'Служебный вызов'
+};
+// Human-readable Russian object names, shared where the same object occurs in several namespaces.
+const phrases = Object.fromEntries(`
+Authorization=авторизация
+Authorizations=активные сеансы
+AuthorizationSettings=настройки сеанса
+PasswordEmail=электронная почта для восстановления пароля
+PasswordReset=сброс пароля
+Password=пароль
+PasswordSettings=настройки двухэтапной аутентификации
+Phone=номер телефона
+Username=имя пользователя
+Usernames=имена пользователя
+RecentEmojiStatuses=недавние эмодзи-статусы
+BotConnection=подключение бота
+BusinessChatLink=ссылка на бизнес-чат
+BusinessChatLinks=ссылки на бизнес-чаты
+Theme=тема оформления
+Themes=темы оформления
+Account=аккаунт
+AutoSaveExceptions=исключения автосохранения
+Passkey=ключ доступа
+Passkeys=ключи доступа
+SecureValue=данные Telegram Passport
+SecureValues=данные Telegram Passport
+WebBrowserSettingsExceptions=исключения настроек встроенного браузера
+PeerConnectedBot=бизнес-бот для выбранного чата
+TakeoutSession=сеанс экспорта данных аккаунта
+AccountTTL=срок неактивности до удаления аккаунта
+AllSecureValues=все данные Telegram Passport
+AuthorizationForm=форма авторизации Telegram Passport
+AutoDownloadSettings=настройки автоматического скачивания
+AutoSaveSettings=настройки автоматического сохранения
+BotBusinessConnection=бизнес-подключение бота
+ChannelDefaultEmojiStatuses=стандартные эмодзи-статусы каналов
+ChannelRestrictedStatusEmojis=ограниченные эмодзи статуса канала
+ChatThemes=темы оформления чатов
+CollectibleEmojiStatuses=коллекционные эмодзи-статусы
+ConnectedBots=подключённые бизнес-боты
+ContactSignUpNotification=уведомления о регистрации контактов
+ContentSettings=настройки чувствительного контента
+DefaultBackgroundEmojis=стандартные эмодзи фона
+DefaultEmojiStatuses=стандартные эмодзи-статусы
+DefaultGroupPhotoEmojis=стандартные эмодзи для фото групп
+DefaultProfilePhotoEmojis=стандартные эмодзи для фото профиля
+GlobalPrivacySettings=общие настройки конфиденциальности
+MultiWallPapers=несколько обоев
+NotifyExceptions=исключения настроек уведомлений
+NotifySettings=настройки уведомлений
+PaidMessagesRevenue=доход от платных сообщений
+Privacy=настройки конфиденциальности
+ReactionsNotifySettings=настройки уведомлений о реакциях
+SavedMusicIds=идентификаторы сохранённой музыки
+SavedRingtones=сохранённые звуки уведомлений
+Theme=тема оформления
+TmpPassword=временный платёжный пароль
+UniqueGiftChatThemes=темы чатов для уникальных подарков
+WallPaper=обои
+WallPapers=обои
+WebAuthorizations=авторизации на сайтах
+WebAuthorization=авторизация на сайте
+WebBrowserSettings=настройки встроенного браузера
+PasskeyRegistration=регистрация ключа доступа
+SignInCodes=коды входа
+Device=устройство для пуш-уведомлений
+Peer=пользователь или чат
+ProfilePhoto=фотография профиля
+AuthorizationTTL=срок действия сеанса
+ChangePhoneCode=код смены номера телефона
+ConfirmPhoneCode=код подтверждения номера телефона
+VerifyEmailCode=код проверки электронной почты
+VerifyPhoneCode=код проверки номера телефона
+MainProfileTab=основная вкладка профиля
+ConnectedBotPaused=приостановка подключённого бизнес-бота
+NoPaidMessagesException=исключение из оплаты сообщений
+SponsoredMessages=рекламные сообщения
+WebBrowserSettingsException=исключение настроек встроенного браузера
+Birthday=день рождения
+BusinessAwayMessage=автоответ об отсутствии
+BusinessGreetingMessage=приветственное сообщение бизнеса
+BusinessIntro=описание бизнеса
+BusinessLocation=местоположение бизнеса
+BusinessWorkHours=часы работы бизнеса
+Color=цвет оформления
+ConnectedBot=подключённый бизнес-бот
+DeviceLocked=состояние блокировки устройства
+EmojiStatus=эмодзи-статус
+PersonalChannel=личный канал в профиле
+Profile=профиль
+Status=статус
+Ringtone=звук уведомлений
+Email=электронная почта
+Tone=стиль генерации текста
+Tones=стили генерации текста
+ToneExample=пример стиля генерации текста
+LoginToken=токен входа по QR-коду
+TempAuthKey=временный ключ авторизации
+Code=код подтверждения
+PaidAuth=платная авторизация
+RecoveryPassword=код восстановления пароля
+TempAuthKeys=временные ключи авторизации
+FirebasePnvLogin=вход с проверкой номера Firebase
+PasskeyLogin=вход по ключу доступа
+FirebasePnvSignUp=регистрация с проверкой номера Firebase
+BotAuthorization=авторизация бота
+WebTokenAuthorization=авторизация по веб-токену
+Out=выход из аккаунта
+MissingCode=неполученный код входа
+FirebaseSms=СМС через Firebase
+PasswordRecovery=восстановление пароля
+LoginEmail=электронная почта для входа
+In=вход в аккаунт
+Up=регистрация аккаунта
+PreviewMedia=медиа в предпросмотре бота
+Message=сообщение
+WebhookJSONQuery=JSON-запрос вебхука
+DownloadFileParams=параметры скачивания файла
+Bot=бот
+AccessSettings=настройки доступа бота
+BotToken=токен бота
+AdminedBots=боты под управлением пользователя
+BotCommands=команды бота
+BotInfo=информация о боте
+BotMenuButton=кнопка меню бота
+BotRecommendations=рекомендации ботов
+PopularAppBots=популярные боты с мини-приложениями
+PreviewInfo=информация о предпросмотре бота
+PreviewMedias=медиа предпросмотра бота
+RequestedWebViewButton=запрошенная кнопка веб-приложения
+WebViewCustomMethod=пользовательский метод веб-приложения
+WebViewButton=кнопка веб-приложения
+CustomRequest=пользовательский запрос бота
+BotBroadcastDefaultAdminRights=стандартные права бота в каналах
+BotGroupDefaultAdminRights=стандартные права бота в группах
+CustomVerification=пользовательский знак верификации
+JoinChatResults=результат обработки запроса бота на вступление в чат
+UserEmojiStatusPermission=разрешение боту менять эмодзи-статус пользователя
+StarRefProgram=партнёрская программа за звёзды
+UserEmojiStatus=эмодзи-статус пользователя
+SearchPostsFlood=лимит поиска публикаций
+Gigagroup=гигагруппа
+Channel=канал или супергруппа
+AllUsernames=все дополнительные имена пользователя
+History=история сообщений
+Messages=сообщения
+ParticipantHistory=история сообщений участника
+Admin=права администратора
+Banned=ограничения участника
+Location=местоположение
+Photo=фотография
+Title=название
+MessageLink=ссылка на сообщение
+AdminLog=журнал действий администраторов
+AdminedPublicChannels=публичные каналы под управлением пользователя
+ChannelRecommendations=рекомендации каналов
+Channels=каналы и супергруппы
+FullChannel=полная информация о канале или супергруппе
+GroupsForDiscussion=группы для привязки обсуждений
+InactiveChannels=неактивные каналы
+LeftChannels=покинутые каналы
+MessageAuthor=автор сообщения
+Participant=участник
+Participants=участники
+SendAs=доступные отправители
+ToChannel=приглашение в канал или супергруппу
+MessageContents=содержимое сообщений
+AntiSpamFalsePositive=ошибочное срабатывание антиспама
+Spam=спам
+Posts=публикации
+BoostsToUnblockRestrictions=число голосов для снятия ограничений
+DiscussionGroup=группа обсуждения канала
+EmojiStickers=наборы эмодзи
+Stickers=стикеры
+AntiSpam=антиспам
+Autotranslation=автоматический перевод
+Forum=режим форума
+JoinRequest=одобрение заявок на вступление
+JoinToSend=обязательное вступление для отправки сообщений
+ParticipantsHidden=скрытие списка участников
+PreHistoryHidden=скрытие старой истории новым участникам
+Signatures=подписи авторов публикаций
+SlowMode=медленный режим
+ViewForumAsMessages=показ форума как единой ленты сообщений
+PaidMessagesPrice=цена платного сообщения
+ChatlistInvite=приглашение в общую папку чатов
+ExportedInvite=опубликованная пригласительная ссылка
+ChatlistUpdates=обновления общей папки чатов
+ExportedInvites=опубликованные пригласительные ссылки
+LeaveChatlistSuggestions=предложения чатов для выхода из общей папки
+Chatlist=общая папка чатов
+JoinedCommunities=сообщества пользователя
+ParticipantJoinedChats=чаты сообщества, в которых состоит участник
+PeerLinkRequests=заявки на привязку чатов к сообществу
+AllPeerLinkRequestApproval=автоодобрение всех заявок на привязку чатов
+CommunityCollapsedInDialogs=сворачивание сообщества в списке чатов
+ParticipantBanned=блокировка участника сообщества
+PeerLink=привязка чата к сообществу
+PeerLinkRequestApproval=одобрение заявки на привязку чата
+Contact=контакт
+FromReplies=блокировка автора пересланного сообщения
+ByPhones=контакты по номерам телефонов
+Contacts=контакты
+CloseFriends=список близких друзей
+ContactToken=токен обмена контактом
+Birthdays=дни рождения контактов
+Blocked=заблокированные пользователи
+ContactIDs=идентификаторы контактов
+Located=пользователи и чаты поблизости
+Saved=сохранённые контакты
+SponsoredPeers=рекомендуемые рекламные чаты
+Statuses=статусы контактов
+TopPeers=частые собеседники
+TopPeerRating=рейтинг частого собеседника
+ContactNote=заметка о контакте
+AuthKey=ключ авторизации
+Session=сеанс
+FutureSalts=будущие серверные соли
+Connection=соединение
+AfterMsg=вызов после одного сообщения протокола
+AfterMsgs=вызов после нескольких сообщений протокола
+WithApnsSecret=вызов с секретом APNs
+WithBusinessConnection=вызов через бизнес-подключение
+WithGooglePlayIntegrity=вызов с проверкой Google Play Integrity
+WithLayer=вызов с указанным слоем API
+WithMessagesRange=вызов с диапазоном сообщений
+WithReCaptcha=вызов с проверкой reCAPTCHA
+WithTakeout=вызов в сеансе экспорта данных
+WithoutUpdates=вызов без доставки обновлений
+DelayDisconnect=соединение с отложенным отключением
+DHParams=параметры обмена ключами Диффи — Хеллмана
+PqMulti=параметры PQ для обмена ключами
+Pq=параметры PQ
+DropAnswer=отмена ожидания ответа RPC
+ClientDHParams=клиентские параметры обмена ключами
+AllWelcomeMessages=все приветственные сообщения
+WelcomeMessage=приветственное сообщение
+CallbackAnswer=ответ на нажатие кнопки
+WelcomeMessages=приветственные сообщения
+PeerFolders=размещение чатов по папкам
+CollectibleInfo=информация о коллекционном объекте
+TermsOfService=условия использования
+Suggestion=предложение интерфейса
+UserInfo=информация о пользователе
+AppConfig=конфигурация приложения
+AppUpdate=обновление приложения
+CdnConfig=конфигурация CDN
+Config=конфигурация
+CountriesList=список стран
+DeepLinkInfo=информация о внутренней ссылке
+InviteText=текст приглашения
+NearestDc=ближайший дата-центр
+PassportConfig=конфигурация Telegram Passport
+PeerColors=цвета чатов и пользователей
+PeerProfileColors=цвета профилей
+PremiumPromo=информация о Telegram Premium
+PromoData=рекламные данные
+RecentMeUrls=недавние ссылки Telegram
+SupportName=имя службы поддержки
+Support=служба поддержки
+TermsOfServiceUpdate=обновление условий использования
+TimezonesList=список часовых поясов
+AppLog=журнал приложения
+BotUpdatesStatus=статус доставки обновлений боту
+Difference=пропущенные изменения
+LangPack=языковой пакет
+Language=язык
+Languages=языки
+Strings=строки перевода интерфейса
+Encryption=секретный чат
+UrlAuth=авторизация через ссылку
+ChatUser=участник группы
+PollAnswer=вариант ответа в опросе
+TodoList=список задач
+ChatInvite=приглашение в чат
+HistoryImportPeer=пригодность чата для импорта истории
+HistoryImport=импорт истории сообщений
+QuickReplyShortcut=шаблон быстрого ответа
+UrlAuthMatchCode=код соответствия авторизации через ссылку
+AllDrafts=все черновики
+RecentReactions=недавние реакции
+RecentStickers=недавние стикеры
+SponsoredMessage=рекламное сообщение
+MessageWithAI=сообщение с помощью ИИ
+RichMessageWithAI=форматированное сообщение с помощью ИИ
+Chat=группа
+ForumTopic=тема форума
+ExportedChatInvite=пригласительная ссылка чата
+FactCheck=проверка фактов в сообщении
+ParticipantReaction=реакция участника
+ParticipantReactions=реакции участника
+PhoneCallHistory=история звонков
+QuickReplyMessages=сообщения быстрого ответа
+RevokedExportedChatInvites=отозванные пригласительные ссылки чата
+SavedHistory=история избранного
+ScheduledMessages=отложенные сообщения
+TopicHistory=история темы форума
+ChatAbout=описание группы
+ChatAdmin=права администратора группы
+ChatCreator=владелец группы
+ChatDefaultBannedRights=стандартные ограничения участников группы
+ChatParticipantRank=подпись участника группы
+ChatPhoto=фотография группы
+ChatTitle=название группы
+InlineBotMessage=сообщение, отправленное через инлайн-бота
+Sticker=стикер
+AdminsWithInvites=администраторы, создавшие приглашения
+AllStickers=все наборы стикеров
+ArchivedStickers=архивные наборы стикеров
+AttachMenuBot=бот меню вложений
+AttachMenuBots=боты меню вложений
+AttachedStickers=наборы стикеров, прикреплённые к медиа
+AvailableEffects=доступные эффекты сообщений
+AvailableReactions=доступные реакции
+BotApp=мини-приложение бота
+BotCallbackAnswer=ответ бота на нажатие кнопки
+ChatInviteImporters=пользователи, вступившие по приглашению
+Chats=группы
+CommonChats=общие группы с пользователем
+CustomEmojiDocuments=документы пользовательских эмодзи
+DefaultHistoryTTL=стандартный срок автоудаления сообщений
+DefaultTagReactions=стандартные реакции-теги
+DhConfig=параметры Диффи — Хеллмана для секретных чатов
+DialogFilters=папки чатов
+DialogUnreadMarks=метки непрочитанных диалогов
+Dialogs=список диалогов
+DiscussionMessage=сообщение, начинающее обсуждение публикации
+DocumentByHash=документ по хешу
+EmojiGameInfo=информация об игре с эмодзи
+EmojiGroups=группы эмодзи
+EmojiKeywordsDifference=изменения ключевых слов эмодзи
+EmojiKeywordsLanguages=языки ключевых слов эмодзи
+EmojiKeywords=ключевые слова эмодзи
+EmojiProfilePhotoGroups=группы эмодзи для фото профиля
+EmojiStatusGroups=группы эмодзи для статуса
+EmojiStickerGroups=группы эмодзи-стикеров
+EmojiURL=ссылка для эмодзи
+ExportedChatInvites=пригласительные ссылки чата
+ExtendedMedia=расширенные данные медиа
+FavedStickers=избранные стикеры
+FeaturedEmojiStickers=рекомендуемые наборы эмодзи
+FeaturedStickers=рекомендуемые наборы стикеров
+ForumTopicsByID=темы форума по идентификаторам
+ForumTopics=темы форума
+FullChat=полная информация о группе
+FutureChatCreatorAfterLeave=будущий владелец группы после выхода
+GameHighScores=рекорды игры
+InlineBotResults=результаты инлайн-бота
+InlineGameHighScores=рекорды игры в инлайн-сообщении
+MaskStickers=наборы масок
+MessageEditData=данные для редактирования сообщения
+MessageReactionsList=список реакций на сообщение
+MessageReadParticipants=участники, прочитавшие сообщение
+MessagesReactions=реакции на сообщения
+MessagesViews=счётчики просмотров сообщений
+MyStickers=собственные наборы стикеров
+OldFeaturedStickers=старые рекомендуемые наборы стикеров
+Onlines=число участников онлайн
+OutboxReadDate=дата прочтения исходящего сообщения
+PaidReactionPrivacy=конфиденциальность платных реакций
+PeerDialogs=состояние выбранных диалогов
+PeerSettings=настройки взаимодействия с пользователем или чатом
+PersonalChannelHistory=история личного канала
+PinnedDialogs=закреплённые диалоги
+PinnedSavedDialogs=закреплённые разделы избранного
+PollResults=результаты опроса
+PollVotes=голоса в опросе
+PreparedInlineMessage=подготовленное инлайн-сообщение
+QuickReplies=быстрые ответы
+RecentLocations=недавние геопозиции
+Replies=ответы на сообщение
+RichMessage=форматированное сообщение
+SavedDialogsByID=разделы избранного по идентификаторам
+SavedDialogs=разделы избранного
+SavedGifs=сохранённые GIF
+SavedReactionTags=теги реакций в избранном
+ScheduledHistory=история отложенных сообщений
+SearchCounters=счётчики результатов поиска
+SearchResultsCalendar=календарь результатов поиска
+SearchResultsPositions=позиции результатов поиска
+SplitRanges=диапазоны разбиения истории
+StickerSet=набор стикеров
+SuggestedDialogFilters=рекомендуемые папки чатов
+TopReactions=популярные реакции
+UnreadMentions=непрочитанные упоминания
+UnreadPollVotes=непросмотренные голоса в опросах
+UnreadReactions=непросмотренные реакции
+WebPagePreview=предпросмотр веб-страницы
+WebPage=веб-страница
+AllChatJoinRequests=все заявки на вступление в чат
+ChatJoinRequest=заявка на вступление в чат
+PeerSettingsBar=панель действий с пользователем или чатом
+DialogUnread=диалог как непрочитанный
+WebView=веб-приложение
+TranscribedAudio=результат расшифровки аудио
+Discussion=обсуждение публикации
+EncryptedHistory=история секретного чата
+Mentions=упоминания
+Reactions=реакции
+Queue=очередь секретных сообщений
+PinnedForumTopics=закреплённые темы форума
+QuickReplies=быстрые ответы
+StickerSets=наборы стикеров
+EncryptedSpam=спам в секретном чате
+MessagesDelivery=доставка сообщений
+MusicListen=прослушивание музыки
+Reaction=реакция
+ReadMetrics=метрики прочтения
+AppWebView=веб-приложение бота
+ChatJoinWebView=веб-приложение вступления в чат
+MainWebView=главное веб-приложение бота
+SimpleWebView=простое веб-приложение
+DefaultSendAs=отправитель по умолчанию
+Draft=черновик
+Gif=GIF
+CustomEmoji=пользовательские эмодзи
+EmojiStickerSets=наборы эмодзи
+Global=глобальный поиск сообщений
+SentMedia=отправленные медиа
+BotRequestedPeer=запрошенный ботом пользователь или чат
+EncryptedFile=зашифрованный файл
+Encrypted=зашифрованное сообщение
+EncryptedService=служебное сообщение секретного чата
+InlineBotResult=результат инлайн-бота
+Media=медиа
+MultiMedia=альбом медиа
+PaidReaction=платная реакция
+ScreenshotNotification=уведомление о снимке экрана
+Vote=голос в опросе
+WebViewData=данные веб-приложения
+WebViewResultMessage=сообщение с результатом веб-приложения
+BotGuestChatResult=результат запроса бота в гостевом чате
+BotPrecheckoutResults=результат предварительной проверки платежа
+BotShippingResults=варианты доставки для платежа бота
+ChatAvailableReactions=доступные реакции чата
+ChatTheme=тема оформления чата
+ChatWallPaper=обои чата
+DefaultReaction=реакция по умолчанию
+EncryptedTyping=индикатор набора в секретном чате
+GameScore=результат игры
+HistoryTTL=срок автоудаления сообщений
+InlineGameScore=результат игры в инлайн-сообщении
+Typing=индикатор набора или другого действия
+Text=текст
+BotInAttachMenu=бот в меню вложений
+DialogFilterTags=цветные метки папок
+DialogPin=закрепление диалога
+NoForwards=защита контента от пересылки
+PeerTranslations=перевод сообщений выбранного чата
+SavedDialogPin=закрепление раздела избранного
+SuggestedPostApproval=одобрение предложенной публикации
+TodoCompleted=выполнение задачи списка
+Audio=аудиозапись
+AllMessages=все сообщения
+DialogFilter=папка чатов
+DialogFiltersOrder=порядок папок чатов
+PinnedForumTopic=закрепление темы форума
+PinnedMessage=закрепление сообщения
+SavedReactionTag=тег реакции в избранном
+ImportedMedia=медиа импортируемой истории
+GiftCode=подарочный код
+AppStoreTransaction=транзакция App Store
+PlayMarketTransaction=транзакция Google Play
+StarsSubscription=подписка за звёзды
+Store=покупка через магазин приложений
+Gift=подарок
+SavedInfo=сохранённые платёжные данные
+StarRefBot=бот партнёрской программы
+StarGift=звёздный подарок
+StarGiftCollection=коллекция подарков
+ConnectedStarRefBot=подключённый бот партнёрской программы
+Invoice=счёт на оплату
+BankCardData=информация о банковской карте
+ConnectedStarRefBots=подключённые боты партнёрской программы
+CraftStarGifts=подарки для комбинирования
+GiveawayInfo=информация о розыгрыше
+PaymentForm=платёжная форма
+PaymentReceipt=квитанция платежа
+PremiumGiftCodeOptions=варианты подарочных кодов Premium
+ResaleStarGifts=подарки на перепродаже
+SavedStarGift=сохранённый подарок
+SavedStarGifts=сохранённые подарки
+StarGiftActiveAuctions=активные аукционы подарков
+StarGiftAuctionAcquiredGifts=подарки, приобретённые на аукционе
+StarGiftAuctionState=состояние аукциона подарков
+StarGiftCollections=коллекции подарков
+StarGiftUpgradeAttributes=атрибуты улучшения подарка
+StarGiftUpgradePreview=предпросмотр улучшения подарка
+StarGiftWithdrawalUrl=ссылка для вывода подарка
+StarGifts=звёздные подарки
+StarsGiftOptions=варианты подарка звёзд
+StarsGiveawayOptions=варианты розыгрыша звёзд
+StarsRevenueAdsAccountUrl=ссылка на рекламный кабинет для дохода в звёздах
+StarsRevenueStats=статистика дохода в звёздах
+StarsRevenueWithdrawalUrl=ссылка для вывода дохода в звёздах
+StarsStatus=баланс и состояние звёзд
+StarsSubscriptions=подписки за звёзды
+StarsTopupOptions=варианты пополнения звёзд
+StarsTransactionsByID=транзакции звёзд по идентификаторам
+StarsTransactions=транзакции звёзд
+SuggestedStarRefBots=рекомендуемые боты партнёрской программы
+UniqueStarGift=уникальный подарок
+UniqueStarGiftValueInfo=информация о стоимости уникального подарка
+PrepaidGiveaway=предоплаченный розыгрыш
+StarsCharge=списание звёзд
+StarGiftOffer=предложение покупки подарка
+StarsForm=форма оплаты звёздами
+ChatStarGiftNotifications=уведомления чата о подарках
+StarGiftsPinnedToTop=закрепление подарков в начале списка
+StarGiftPrice=цена перепродажи подарка
+RequestedInfo=запрошенные платёжные данные
+Call=звонок
+GroupCall=групповой звонок
+ConferenceCall=конференц-звонок
+ConferenceCallInvite=приглашение в конференц-звонок
+ConferenceCallParticipants=участники конференц-звонка
+GroupCallMessages=сообщения группового звонка
+GroupCallParticipantMessages=сообщения участника группового звонка
+GroupCallParticipant=участник группового звонка
+GroupCallTitle=название группового звонка
+GroupCallInvite=приглашение в групповой звонок
+CallConfig=конфигурация звонков
+GroupCallChainBlocks=блоки цепочки группового звонка
+GroupCallJoinAs=доступные профили для входа в звонок
+GroupCallStars=звёзды группового звонка
+GroupCallStreamChannels=каналы потока группового звонка
+GroupCallStreamRtmpUrl=RTMP-адрес и ключ трансляции
+GroupParticipants=участники группового звонка
+ConferenceCallParticipant=участник конференц-звонка
+ToGroupCall=приглашение в групповой звонок
+GroupCallPresentation=демонстрация экрана в групповом звонке
+CallDebug=отладочные данные звонка
+CallLog=журнал звонка
+DefaultGroupCallJoinAs=профиль для входа в звонки по умолчанию
+ConferenceCallBroadcast=рассылка данных конференц-звонка
+GroupCallEncryptedMessage=зашифрованное сообщение группового звонка
+GroupCallMessage=сообщение группового звонка
+SignalingData=сигнальные данные звонка
+CallRating=оценка качества звонка
+ScheduledGroupCall=запланированный групповой звонок
+GroupCallRecord=запись группового звонка
+GroupCallSettings=настройки группового звонка
+GroupCallStartSubscription=уведомление о начале группового звонка
+Photos=фотографии
+UserPhotos=фотографии пользователя
+ContactProfilePhoto=фотография профиля контакта
+Boost=голос за канал или группу
+BoostsList=список голосов за канал или группу
+BoostsStatus=состояние голосов за канал или группу
+MyBoosts=собственные голоса
+UserBoosts=голоса пользователя
+Job=задание отправки СМС
+SmsJob=задание отправки СМС
+EligibleToJoin=доступность участия в программе отправки СМС
+Settings=настройки
+BroadcastStats=статистика канала
+MegagroupStats=статистика супергруппы
+MessagePublicForwards=публичные пересылки сообщения
+MessageStats=статистика сообщения
+PollStats=статистика опроса
+StoryPublicForwards=публичные пересылки истории
+StoryStats=статистика истории
+AsyncGraph=асинхронный график статистики
+StickerToSet=стикер в набор
+StickerPosition=позиция стикера в наборе
+ShortName=короткое имя набора стикеров
+StickerFromSet=стикер из набора
+StickerSetThumb=обложка набора стикеров
+StealthMode=режим инкогнито в историях
+Story=история
+Album=альбом историй
+Stories=истории
+StoryLink=ссылка на историю
+AlbumStories=истории альбома
+Albums=альбомы историй
+AllReadPeerStories=отметки прочтения историй по чатам
+AllStories=все истории
+ChatsToSend=чаты, от имени которых можно публиковать истории
+PeerMaxIDs=последние идентификаторы историй по чатам
+PeerStories=истории пользователя или чата
+PinnedStories=закреплённые истории
+StoriesArchive=архив историй
+StoriesByID=истории по идентификаторам
+StoriesViews=просмотры историй
+StoryReactionsList=реакции на историю
+StoryViewsList=список просмотревших историю
+StoryViews=счётчик просмотров истории
+Live=прямая трансляция истории
+AllStoriesHidden=скрытие всех историй
+PeerStoriesHidden=скрытие историй пользователя или чата
+Pinned=закрепление истории в профиле
+PinnedToTop=закрепление истории в начале списка
+ChannelDifference=пропущенные события канала
+State=состояние синхронизации событий
+CdnFileHashes=хеши частей файла на CDN
+CdnFile=файл с CDN
+FileHashes=хеши частей файла
+File=файл
+WebFile=веб-файл
+BigFilePart=часть большого файла
+FilePart=часть файла
+FullUser=полная информация о пользователе
+RequirementsToContact=условия отправки сообщения пользователю
+SavedMusicByID=сохранённая музыка по идентификаторам
+SavedMusic=сохранённая музыка
+Users=пользователи
+SecureValueErrors=ошибки проверки Telegram Passport
+`.trim().split('\n').map(line => line.split('=')));
+
+const overrides = {
+ 'auth.LogOutRequest':'Выйти из аккаунта', 'auth.SignInRequest':'Войти в аккаунт', 'auth.SignUpRequest':'Зарегистрировать аккаунт',
+ 'auth.FirebasePnvSignUpRequest':'Зарегистрировать аккаунт через Firebase с проверкой номера',
+ 'bots.SendCustomRequestRequest':'Отправить пользовательский запрос бота',
+ 'channels.ToggleJoinRequestRequest':'Включить или отключить одобрение заявок на вступление',
+ 'communities.CreateRequest':'Создать сообщество',
+ 'contacts.BlockRequest':'Заблокировать пользователя', 'contacts.UnblockRequest':'Разблокировать пользователя',
+ 'contacts.SearchRequest':'Найти контакты', 'core.PingRequest':'Проверить соединение',
+ 'messages.ReportRequest':'Подать жалобу на сообщения', 'messages.SearchRequest':'Найти сообщения в чате',
+ 'stories.ReportRequest':'Подать жалобу на историю', 'smsjobs.JoinRequest':'Вступить в программу отправки СМС',
+ 'smsjobs.LeaveRequest':'Выйти из программы отправки СМС',
+ 'payments.BotCancelStarsSubscriptionRequest':'Отменить подписку за звёзды от имени бота',
+ 'payments.CanPurchaseStoreRequest':'Проверить возможность покупки через магазин приложений',
+ 'payments.CheckCanSendGiftRequest':'Проверить возможность отправки подарка',
+ 'stories.CanSendStoryRequest':'Проверить возможность публикации истории',
+ 'bots.CanSendMessageRequest':'Проверить возможность отправки сообщения ботом',
+};
+Object.assign(verbs,{Dismiss:'Отклонить'});
+Object.assign(phrases,{Music:'музыка',RecentSticker:'недавний стикер',SendMessage:'отправка сообщений ботом',ToGigagroup:'преобразование в гигагруппу'});
+const missing = new Set();
+function russian(r) {
+ const key = `${r.namespace}.${r.request_class}`;
+ if (overrides[key]) return overrides[key];
+ const base = r.request_class.replace(/Request$/, '');
+ const verb = Object.keys(verbs).sort((a,b)=>b.length-a.length).find(v=>base.startsWith(v));
+ if (!verb) { missing.add(base); return ''; }
+ const tail = base.slice(verb.length);
+ if (!phrases[tail]) { missing.add(tail || base); return ''; }
+ return `${verbs[verb]}: ${phrases[tail]}`;
+}
+const rows = source.requests.map(r=>[groups[r.namespace],russian(r),`${r.namespace}.${r.request_class}`,null]);
+if (missing.size) throw new Error('Missing translations: ' + [...missing].sort().join(', '));
+if (process.argv.includes('--check')) { console.log(JSON.stringify({rows:rows.length,translated:rows.every(r=>/[А-Яа-яЁё]/.test(r[1]))})); process.exit(0); }
+const outputDir=path.join(root,'outputs','telegram-policy');
+await fs.mkdir(outputDir,{recursive:true});
+const wb=Workbook.create();
+const sheet=wb.worksheets.add('Политика');
+sheet.showGridLines=false;
+const all=sheet.getRange(`A1:D${rows.length+1}`);
+all.values=[['Раздел','Название на русском','Метод','Политика'],...rows];
+all.format.font={name:'Arial',size:10,color:'#202938'};
+all.format.rowHeight=30;
+all.format.verticalAlignment='center';
+sheet.getRange(`A1:A${rows.length+1}`).format.columnWidth=30;
+sheet.getRange(`B1:B${rows.length+1}`).format.columnWidth=76;
+sheet.getRange(`C1:C${rows.length+1}`).format.columnWidth=65;
+sheet.getRange(`D1:D${rows.length+1}`).format.columnWidth=60;
+sheet.getRange(`A2:B${rows.length+1}`).format.wrapText=true;
+sheet.getRange(`D2:D${rows.length+1}`).format.wrapText=true;
+const table=sheet.tables.add(`A1:D${rows.length+1}`,true,'TelegramPolicy');
+table.showFilterButton=true;
+sheet.getRange('A1:D1').format={fill:'#243746',font:{name:'Arial',size:10,bold:true,color:'#FFFFFF'},horizontalAlignment:'center',verticalAlignment:'center',rowHeight:28};
+sheet.getRange(`D2:D${rows.length+1}`).format.fill='#FFF7DF';
+sheet.freezePanes.freezeRows(1);
+wb.recalculate();
+console.log((await wb.inspect({kind:'table',range:'Политика!A1:D6',include:'values',tableMaxRows:6,tableMaxCols:4,maxChars:2200})).ndjson);
+const preview=await wb.render({sheetName:'Политика',range:'A1:D12',scale:1,format:'png'});
+await fs.writeFile(path.join(outputDir,'preview.png'),new Uint8Array(await preview.arrayBuffer()));
+await (await SpreadsheetFile.exportXlsx(wb)).save(path.join(outputDir,'Политика Telegram.xlsx'));
+console.log(JSON.stringify({rows:rows.length,file:path.join(outputDir,'Политика Telegram.xlsx')}));
